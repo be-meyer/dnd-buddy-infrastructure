@@ -31,8 +31,6 @@ def send_websocket_message(connection_id, message_type, content):
             'content': content
         })
         
-        logger.info(f"Sending WebSocket message: type={message_type}, size={len(message)} bytes")
-        
         apigw_management.post_to_connection(
             ConnectionId=connection_id,
             Data=message.encode('utf-8')
@@ -104,7 +102,6 @@ def lambda_handler(event, context):
             - A list of content blocks: [{"type": "text", "text": "...", "index": 0}]
             - A plain string (for backward compatibility)
             """
-            logger.info(f"stream_callback called with chunk type: {type(chunk)}")
             success = send_websocket_message(connection_id, 'chunk', chunk)
             if not success:
                 logger.warning(f"Failed to send chunk to connection {connection_id}")

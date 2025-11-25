@@ -40,7 +40,6 @@ class StreamingCallbackHandler(BaseCallbackHandler):
         Bedrock Converse API may send structured content blocks or plain strings.
         We need to handle both formats and pass them through to maintain consistency.
         """
-        logger.info(f"on_llm_new_token called: token_type={type(token)}, token_preview={str(token)[:100]}")
         
         if token:
             # Check if token is already a structured format (from Bedrock Converse)
