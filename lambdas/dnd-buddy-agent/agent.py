@@ -175,7 +175,7 @@ def create_agent(user_id: str, campaign: str, session_id: str, stream_callback: 
             
             # Inject session_id for tools that need it
             if tool_name in session_tools:
-                tool_args['session_id'] = input_data.get('sessionId')
+                tool_args['session_id'] = session_id
             
             # Execute tool
             tool_func = tool_map.get(tool_name)
@@ -326,8 +326,9 @@ Examples:
 
 ## CONVERSATION CONTEXT
 - You only see the last exchange by default (last 2 messages: user + your response)
-- If user references earlier conversation ("as we discussed", "you mentioned", "earlier you said"), use **get_conversation_history**
-- Specify message_count: 2 = last exchange, 10 = last 5 exchanges, 20 = last 10 exchanges
+- If user references earlier conversation ("as we discussed", "you mentioned", "earlier you said"), use **get_conversation_history(message_count=N)**
+- Only specify message_count parameter: 10 = last 5 exchanges, 20 = last 10 exchanges
+- DO NOT specify session_id - it's automatically provided
 
 ## DICE ROLLS
 Interpret natural language:

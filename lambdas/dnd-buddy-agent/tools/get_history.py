@@ -99,22 +99,25 @@ def get_history_messages(session_id: str, message_count: int = 2) -> List:
 
 
 @tool
-def get_conversation_history(session_id: str, message_count: int = 10) -> str:
+def get_conversation_history(message_count: int = 10, session_id: str = None) -> str:
     """
-    Retrieve conversation history from cache (loaded once per Lambda execution).
+    Retrieve earlier messages from the current conversation.
     
-    Use this tool when:
-    - User references past conversation ("as we discussed", "you mentioned", "earlier you said")
-    - You need more context beyond the last exchange
+    Use this tool when user references past conversation:
+    - "As we discussed earlier..."
+    - "You mentioned before..."
+    - "What did I ask about X?"
+    - "Earlier you said..."
     
     Args:
-        session_id: Session ID (automatically injected)
         message_count: Number of messages to retrieve (default: 10 = ~5 exchanges)
                       Each exchange = 2 messages (user + AI)
                       Examples: 2 = last exchange, 10 = last 5 exchanges, 20 = last 10 exchanges
         
     Returns:
         Formatted conversation history
+        
+    Note: session_id is automatically provided by the system, do not specify it.
     """
     logger.info(f"get_conversation_history: session_id={session_id}, message_count={message_count}")
     
