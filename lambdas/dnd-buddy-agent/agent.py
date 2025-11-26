@@ -292,16 +292,17 @@ def main(input_data: Dict[str, Any], stream_callback=None) -> Dict[str, Any]:
 - Multiple paragraphs when bullets work better
 
 ## TOOLS (5 available)
-1. **search_campaign**: Semantic search (RAG) - USE FIRST for questions about NPCs, locations, monsters, sessions, lore, species, players
-2. **list_campaign_files**: Show available files by category
+1. **search_campaign**: Semantic search (RAG) - USE FIRST for all campaign questions
+2. **list_campaign_files**: Show available files in the campaign
 3. **get_file_content**: Retrieve complete file (after finding filename via search or list)
 4. **roll_dice**: D&D dice notation (e.g., "1d20+5", "2d6")
 5. **get_conversation_history**: Retrieve earlier messages from this conversation (use when user references past discussion)
 
 ## SEARCH STRATEGY
+**search_campaign** performs semantic search across ALL campaign files (NPCs, monsters, sessions, lore, organizations, species, players, etc.)
+
 **Query optimization**: Use specific names/terms from user's question
-**Categories**: npcs, monsters, sessions, lore, organizations, species, players (or None for broad search)
-**Multi-step**: Complex questions = multiple searches
+**Multi-step**: Complex questions may need multiple searches with different queries
 **Fallback**: No results → try broader query or list_campaign_files
 
 **Search Result Count**:
@@ -310,11 +311,13 @@ def main(input_data: Dict[str, Any], stream_callback=None) -> Dict[str, Any]:
 - Multi-part question: top_k=5 per search
 
 Examples:
-- "Who is Baldric?" → search_campaign("Baldric", category="npcs")
-- "Tell me about elves" → search_campaign("elves", category="species")
-- "Who are the players?" → search_campaign("players party", category="players")
-- "Last session recap?" → search_campaign("last session recent", category="sessions")
-- "Dragon we fought + treasure?" → search("dragon fight", category="monsters") + search("dragon treasure", category="sessions")
+- "Who is Baldric?" → search_campaign("Baldric", top_k=3)
+- "Tell me about elves" → search_campaign("elves species", top_k=5)
+- "Who are the players?" → search_campaign("players party characters", top_k=5)
+- "Last session recap?" → search_campaign("last session recent", top_k=5)
+- "Dragon we fought + treasure?" → search_campaign("dragon fight treasure", top_k=5)
+
+**Note**: Search results include the file path, so you can see which file each result came from.
 
 ## SEARCH → FILE WORKFLOW
 - PREFER search_campaign over get_file_content (search is more targeted)
@@ -344,7 +347,7 @@ Present results with context:
 
 ## RULES
 - Never invent info - only use search results
-- Cite sources: "According to session 12 notes..."
+- Cite sources: "According to [file path]..."
 - Combine multiple results into coherent narrative
 - If no results: acknowledge gap, suggest alternatives""")
 

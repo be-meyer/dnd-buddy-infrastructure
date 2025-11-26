@@ -29,8 +29,6 @@ BEDROCK_MODEL_ID = os.environ.get('BEDROCK_MODEL_ID', 'cohere.embed-english-v3')
 # Add environment variables at top:
 CHUNK_SIZE = int(os.environ.get('CHUNK_SIZE', '800'))
 CHUNK_OVERLAP = int(os.environ.get('CHUNK_OVERLAP', '100'))
-# Configurable categories - can be overridden via environment variable
-VALID_CATEGORIES = os.environ.get('VALID_CATEGORIES', 'npcs,lore,monsters,sessions,organizations,species,players').split(',')
 
 def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> List[Dict]:
     """Split text into overlapping chunks."""
@@ -94,7 +92,7 @@ def generate_embedding(text: str) -> List[float]:
     return None
 
 
-def delete_existing_vectors(user_id: str, campaign: str, category: str, filename: str) -> int:
+def delete_existing_vectors(user_id: str, campaign: str, file_path: str) -> int:
     """Delete all existing vectors for a given file using metadata filtering."""
     try:
         # Use QueryVectors with metadata filter to find all vectors for this file
@@ -119,8 +117,7 @@ def delete_existing_vectors(user_id: str, campaign: str, category: str, filename
                     '$and': [
                         {'userId': user_id},
                         {'campaign': campaign},
-                        {'category': category},
-                        {'filename': filename}
+                        {'filePath': file_path}
                     ]
                 }
             }
@@ -182,8 +179,7 @@ def index_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     
     # Extract other parameters from body
     campaign = body.get('campaign')
-    category = body.get('category')
-    filename = body.get('filename')
+    file_path = body.get('filePath')  # Full path relative to campaign root
     file_content = body.get('content')
     
     logger.info(f"User ID from Cognito: {user_id}")
@@ -194,31 +190,22 @@ def index_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         'Access-Control-Allow-Methods': 'POST,OPTIONS'
     }
     
-    if not all([user_id, campaign, category, filename, file_content]):
+    if not all([user_id, campaign, file_path, file_content]):
         return {
             'statusCode': 400,
             'headers': cors_headers,
-            'body': json.dumps({'error': 'Missing required parameters'})
-        }
-    
-    # Validate category (optional - can be disabled by setting VALIDATE_CATEGORIES=false)
-    validate_categories = os.environ.get('VALIDATE_CATEGORIES', 'true').lower() == 'true'
-    if validate_categories and category not in VALID_CATEGORIES:
-        return {
-            'statusCode': 400,
-            'headers': cors_headers,
-            'body': json.dumps({'error': f'Invalid category. Must be one of: {", ".join(VALID_CATEGORIES)}'})
+            'body': json.dumps({'error': 'Missing required parameters: userId, campaign, filePath, content'})
         }
     
     try:
         # 0. Delete existing vectors for this file
-        deleted_count = delete_existing_vectors(user_id, campaign, category, filename)
-        logger.info(f"Deleted {deleted_count} existing vectors for {filename}")
+        deleted_count = delete_existing_vectors(user_id, campaign, file_path)
+        logger.info(f"Deleted {deleted_count} existing vectors for {file_path}")
         original_text = file_content
         logger.info(f"Processing {len(original_text)} characters")
         
         # 1. Save file to campaign files bucket (overwrites existing)
-        s3_key = f"{user_id}/{campaign}/{category}/{filename}"
+        s3_key = f"{user_id}/{campaign}/{file_path}"
         logger.info(f"Saving file to s3://{CAMPAIGN_FILES_BUCKET}/{s3_key}")
         
         s3_client.put_object(
@@ -229,8 +216,7 @@ def index_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             Metadata={
                 'userId': user_id,
                 'campaign': campaign,
-                'category': category,
-                'filename': filename,
+                'filePath': file_path,
                 'lastModified': datetime.utcnow().isoformat() + 'Z'
             }
         )
@@ -252,7 +238,7 @@ def index_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 continue
             
             # Prepare vector for batch insert
-            vector_key = f"{user_id}#{campaign}#{category}#{filename}#{chunk['chunkIndex']}"
+            vector_key = f"{user_id}#{campaign}#{file_path}#{chunk['chunkIndex']}"
             
             vectors_to_insert.append({
                 'key': vector_key,
@@ -260,8 +246,7 @@ def index_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'metadata': {
                     'userId': user_id,
                     'campaign': campaign,
-                    'category': category,
-                    'filename': filename,
+                    'filePath': file_path,
                     'chunkText': chunk['text'],
                     'chunkIndex': chunk['chunkIndex'],
                     'totalChunks': chunk['totalChunks'],
@@ -302,8 +287,7 @@ def index_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'chunksDeleted': deleted_count,
                 'userId': user_id,
                 'campaign': campaign,
-                'category': category,
-                'filename': filename
+                'filePath': file_path
             })
         }
         
