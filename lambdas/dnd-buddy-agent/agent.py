@@ -1,6 +1,6 @@
 """
 D&D Buddy Agent - AgentCore Runtime implementation with LangGraph.
-Tools: search_campaign, roll_dice, list_campaign_files, get_file_content
+Tools: search_campaign, roll_dice, get_file_content
 """
 import os
 import logging
@@ -19,7 +19,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Import tools
-from tools import search_campaign, roll_dice, list_campaign_files, get_file_content, get_conversation_history
+from tools import search_campaign, roll_dice, get_file_content, get_conversation_history
 from tools.get_history import get_history_messages
 
 # Environment variables
@@ -85,11 +85,16 @@ def create_agent(user_id: str, campaign: str, session_id: str, stream_callback: 
     # Tool planning LLM without streaming (we don't want to stream tool calls)
     llm_tool_planning = ChatBedrock(
         model_id=BEDROCK_MODEL_ID_TOOL,
-        model_kwargs={"temperature": 0.3, "max_tokens": 400}
+        model_kwargs={
+            "temperature": 0.0,
+            "top_k": 1,
+            "top_p": 1,
+            "max_tokens": 400
+        }
     )
     
     # Bind tools to LLM
-    tools = [search_campaign, roll_dice, list_campaign_files, get_file_content, get_conversation_history]
+    tools = [search_campaign, roll_dice, get_file_content, get_conversation_history]
     llm_with_tools = llm.bind_tools(tools)
     llm_tool_planning_tools = llm_tool_planning.bind_tools(tools)
     
@@ -139,13 +144,12 @@ def create_agent(user_id: str, campaign: str, session_id: str, stream_callback: 
     tool_map = {
         'search_campaign': search_campaign,
         'roll_dice': roll_dice,
-        'list_campaign_files': list_campaign_files,
         'get_file_content': get_file_content,
         'get_conversation_history': get_conversation_history
     }
     
     # Tools that need user context
-    context_tools = {'search_campaign', 'list_campaign_files', 'get_file_content'}
+    context_tools = {'search_campaign', 'get_file_content'}
     
     # Tools that need session_id
     session_tools = {'get_conversation_history'}
@@ -366,10 +370,9 @@ You are **D&D Buddy**, an expert D&D 5e campaign assistant for the campaign: **{
 ## TOOLS AVAILABLE
 
 1. **search_campaign**: Semantic search—use _first_ for all campaign info needs. Returns relevant snippets from ALL files (NPCs, monsters, sessions, lore, organizations, custom content).
-2. **list_campaign_files**: Get filenames by type.
-3. **get_file_content**: Full file text—use only if user requests “everything”, same file is referenced in multiple search results, or a section is missing.
-4. **roll_dice**: D&D dice syntax (e.g., `1d20+5`, `2d6`).
-5. **get_conversation_history**: Retrieve _earlier_ messages if referenced (user says “as we discussed”). Only specify number of messages needed.
+2. **get_file_content**: Full file text—use only if user requests “everything”, same file is referenced in multiple search results, or a section is missing.
+3. **roll_dice**: D&D dice syntax (e.g., `1d20+5`, `2d6`).
+4. **get_conversation_history**: Retrieve _earlier_ messages if referenced (user says “as we discussed”). Only specify number of messages needed.
 
 ---
 
