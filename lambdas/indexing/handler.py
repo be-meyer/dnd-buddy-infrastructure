@@ -238,7 +238,9 @@ def index_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 continue
             
             # Prepare vector for batch insert
-            vector_key = f"{user_id}#{campaign}#{file_path}#{chunk['chunkIndex']}"
+            # Replace slashes in file_path to avoid key format issues
+            safe_file_path = file_path.replace('/', '|')
+            vector_key = f"{user_id}#{campaign}#{safe_file_path}#{chunk['chunkIndex']}"
             
             vectors_to_insert.append({
                 'key': vector_key,
