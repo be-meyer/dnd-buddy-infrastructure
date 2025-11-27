@@ -92,6 +92,33 @@ def lambda_handler(event, context):
         }
 
 
+def extract_preview(content: str, min_chars: int = 150, max_chars: int = 500) -> str:
+    """
+    Extract the first paragraph for preview, with min/max character limits.
+    """
+    if not content:
+        return ''
+    
+    # Split on double newlines to get paragraphs
+    paragraphs = content.split('\n\n')
+    first_para = paragraphs[0].strip()
+    
+    # If first paragraph is too short and there are more, include more
+    if len(first_para) < min_chars and len(paragraphs) > 1:
+        preview = first_para
+        for para in paragraphs[1:]:
+            preview += '\n\n' + para.strip()
+            if len(preview) >= min_chars:
+                break
+        first_para = preview
+    
+    # Truncate if too long
+    if len(first_para) > max_chars:
+        first_para = first_para[:max_chars].rsplit(' ', 1)[0] + '...'
+    
+    return first_para
+
+
 def list_user_sessions(user_id: str) -> Dict[str, Any]:
     """
     List all sessions for a user, sorted by most recent first.
@@ -130,23 +157,32 @@ def list_user_sessions(user_id: str) -> Dict[str, Any]:
             except (ValueError, IndexError):
                 last_updated = None
             
-            # Get last message as preview (most recent activity)
+            # Get last agent message as preview (first paragraph, 150-500 chars)
             preview = None
             if history:
-                last_msg = history[-1]
-                content = last_msg.get('data', {}).get('content', '')
-                msg_type = last_msg.get('type', '')
-                prefix = 'You: ' if msg_type == 'human' else 'Agent: '
+                # Find the last agent (ai) message for preview
+                for msg in reversed(history):
+                    if msg.get('type') == 'ai':
+                        content = msg.get('data', {}).get('content', '')
+                        
+                        # Handle content as either string or list
+                        if isinstance(content, list):
+                            content_str = ' '.join(str(item) for item in content) if content else ''
+                        else:
+                            content_str = str(content)
+                        
+                        preview = extract_preview(content_str)
+                        break
                 
-                # Handle content as either string or list
-                if isinstance(content, list):
-                    # If content is a list, join it or take first element
-                    content_str = ' '.join(str(item) for item in content) if content else ''
-                else:
-                    content_str = str(content)
-                
-                preview_text = content_str[:80] + '...' if len(content_str) > 80 else content_str
-                preview = f"{prefix}{preview_text}"
+                # Fallback to last message if no agent message found
+                if preview is None:
+                    last_msg = history[-1]
+                    content = last_msg.get('data', {}).get('content', '')
+                    if isinstance(content, list):
+                        content_str = ' '.join(str(item) for item in content) if content else ''
+                    else:
+                        content_str = str(content)
+                    preview = extract_preview(content_str)
             
             sessions.append({
                 'sessionId': session_id,
