@@ -29,6 +29,13 @@ export class WebSocketStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: WebSocketStackProps) {
     super(scope, id, props);
 
+    // Log group for WebSocket connection Lambda
+    const connectionLogGroup = new logs.LogGroup(this, 'WebSocketConnectionLogGroup', {
+      logGroupName: '/aws/lambda/dnd-buddy-websocket-connection',
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     // Lambda function for WebSocket connection management and authorization
     // This single Lambda handles: authorization, $connect, and $disconnect
     const connectionLambda = new lambda.Function(this, 'WebSocketConnectionLambda', {
@@ -38,10 +45,7 @@ export class WebSocketStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../../lambdas/websocket-connection')),
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
-      logRetention: logs.RetentionDays.ONE_WEEK,
-      logRetentionRetryOptions: {
-        maxRetries: 3,
-      },
+      logGroup: connectionLogGroup,
       environment: {
         CONNECTION_TABLE_NAME: props.connectionTable.tableName,
         COGNITO_USER_POOL_ID: props.userPool.userPoolId,
@@ -51,6 +55,13 @@ export class WebSocketStack extends cdk.Stack {
 
     // Grant DynamoDB permissions
     props.connectionTable.grantReadWriteData(connectionLambda);
+
+    // Log group for Agent Lambda
+    const agentLogGroup = new logs.LogGroup(this, 'AgentLogGroup', {
+      logGroupName: '/aws/lambda/dnd-buddy-agent',
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
 
     // Agent Lambda - Create before WebSocket API so we can reference it
     this.agentLambda = new lambda.Function(this, 'AgentLambda', {
@@ -69,11 +80,8 @@ export class WebSocketStack extends cdk.Stack {
         },
       }),
       timeout: cdk.Duration.minutes(5),
-      memorySize: 1024,
-      logRetention: logs.RetentionDays.ONE_WEEK,
-      logRetentionRetryOptions: {
-        maxRetries: 3,
-      },
+      memorySize: 512,
+      logGroup: agentLogGroup,
       environment: {
         VECTOR_BUCKET_NAME: `dnd-vec-${cdk.Stack.of(this).account}`,
         VECTOR_INDEX_NAME: props.vectorIndexName,

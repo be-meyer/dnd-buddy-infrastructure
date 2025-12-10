@@ -17,9 +17,9 @@ CAMPAIGN_FILES_BUCKET = os.environ.get('CAMPAIGN_FILES_BUCKET')
 
 
 @tool
-def get_file_content(category: str, filename: str, user_id: str = None, campaign: str = None) -> str:
+def get_file_content(file_path: str, user_id: str = None, campaign: str = None) -> str:
     """
-    Retrieve the complete, full content of a specific campaign file.
+    Retrieve the complete, full content of a specific campaign file by its path.
     
     Use this tool when:
     - search_campaign returns partial information and you need the complete file
@@ -27,13 +27,12 @@ def get_file_content(category: str, filename: str, user_id: str = None, campaign
     - You need full details that might not be in search results
     - The user references a specific file by name
     
-    First use list_campaign_files if you don't know the exact filename.
+    First use list_campaign_files if you don't know the exact file path.
     
     Args:
-        category: File category - must be one of:
-                  'npcs' (characters), 'lore' (world info),
-                  'monsters' (creatures), 'sessions' (session notes)
-        filename: Exact name of the file to retrieve (e.g., 'sildar-hallwinter.md')
+        file_path: Full path to the file relative to campaign root
+                   Examples: 'npcs/sildar-hallwinter.md', 'monsters/goblin.md',
+                            'lore/phandalin/history.md', 'sessions/session-1.md'
         
     Returns:
         Complete file content with all details
@@ -41,19 +40,14 @@ def get_file_content(category: str, filename: str, user_id: str = None, campaign
     Note: user_id and campaign are automatically provided by the system.
     """
     
-    logger.info(f"get_file_content: category={category}, filename={filename}, user={user_id}, campaign={campaign}")
+    logger.info(f"get_file_content: file_path={file_path}, user={user_id}, campaign={campaign}")
     
     if not user_id or not campaign or not CAMPAIGN_FILES_BUCKET:
         return "Error: User context or bucket not available"
     
-    # Validate category
-    valid_categories = ['npcs', 'lore', 'monsters', 'sessions']
-    if category not in valid_categories:
-        return f"Invalid category '{category}'. Must be one of: {', '.join(valid_categories)}"
-    
     try:
         # Build S3 key
-        s3_key = f"{user_id}/{campaign}/{category}/{filename}"
+        s3_key = f"{user_id}/{campaign}/{file_path}"
         
         # Get file from S3
         response = s3_client.get_object(
@@ -63,12 +57,15 @@ def get_file_content(category: str, filename: str, user_id: str = None, campaign
         
         content = response['Body'].read().decode('utf-8')
         
-        result = f"📄 **{filename}** (from {category}):\n\n"
+        # Extract filename from path for display
+        filename = file_path.split('/')[-1]
+        
+        result = f"📄 **{filename}** ({file_path}):\n\n"
         result += content
         
         return result
         
     except s3_client.exceptions.NoSuchKey:
-        return f"File not found: {category}/{filename}"
+        return f"File not found: {file_path}"
     except Exception as e:
         return f"Error retrieving file: {str(e)}"

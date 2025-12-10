@@ -23,7 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Import tools
-from tools import search_campaign, roll_dice, get_file_content, get_conversation_history
+from tools import search_campaign, roll_dice, get_file_content, get_conversation_history, translate_runes
 from tools.get_history import get_history_messages, save_messages
 
 # =============================================================================
@@ -35,7 +35,7 @@ BEDROCK_MODEL_PLANNING = os.environ.get('BEDROCK_MODEL_ID_TOOL', 'eu.amazon.nova
 MAX_ITERATIONS = int(os.environ.get('MAX_AGENT_ITERATIONS', '3'))
 
 # Tool registry
-TOOLS = [search_campaign, roll_dice, get_file_content, get_conversation_history]
+TOOLS = [search_campaign, roll_dice, get_file_content, get_conversation_history, translate_runes]
 TOOL_MAP = {tool.name: tool for tool in TOOLS}
 CONTEXT_TOOLS = {'search_campaign', 'get_file_content'}
 SESSION_TOOLS = {'get_conversation_history'}
@@ -137,6 +137,11 @@ This is the established canon. If something is missing here or in search results
 4. **get_conversation_history**
    Retrieve earlier messages when user references prior discussion.
    Specify only the number of messages needed (typically 2–6).
+
+5. **translate_runes**
+   Translate text to/from The Architects' ancient rune cipher.
+   Use when user asks to encode a message in runes, decode rune inscriptions,
+   or create riddles/puzzles using the ancient script.
 
 ---
 

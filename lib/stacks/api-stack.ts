@@ -23,6 +23,13 @@ export class ApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
 
+    // Log group for Indexing Lambda
+    const indexingLogGroup = new logs.LogGroup(this, 'IndexingLogGroup', {
+      logGroupName: '/aws/lambda/dnd-buddy-indexing',
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     // Indexing Lambda function (boto3 is included in runtime, no layer needed)
     const indexingLambda = new lambda.Function(this, 'IndexingLambda', {
       functionName: 'dnd-buddy-indexing',
@@ -31,10 +38,7 @@ export class ApiStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../../lambdas/indexing')),
       timeout: cdk.Duration.minutes(5),
       memorySize: 512,
-      logRetention: logs.RetentionDays.ONE_WEEK,
-      logRetentionRetryOptions: {
-        maxRetries: 3,
-      },
+      logGroup: indexingLogGroup,
       environment: {
         CAMPAIGN_FILES_BUCKET: props.campaignFilesBucket.bucketName,
         VECTOR_BUCKET_NAME: `dnd-vec-${cdk.Stack.of(this).account}`,
@@ -69,6 +73,13 @@ export class ApiStack extends cdk.Stack {
       })
     );
 
+    // Log group for Sessions Lambda
+    const sessionsLogGroup = new logs.LogGroup(this, 'SessionsLogGroup', {
+      logGroupName: '/aws/lambda/dnd-buddy-sessions',
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     // Sessions Lambda for managing chat history
     const sessionsLambda = new lambda.Function(this, 'SessionsLambda', {
       functionName: 'dnd-buddy-sessions',
@@ -77,10 +88,7 @@ export class ApiStack extends cdk.Stack {
       code: lambda.Code.fromAsset(path.join(__dirname, '../../lambdas/sessions')),
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
-      logRetention: logs.RetentionDays.ONE_WEEK,
-      logRetentionRetryOptions: {
-        maxRetries: 3,
-      },
+      logGroup: sessionsLogGroup,
       environment: {
         CHAT_HISTORY_TABLE_NAME: props.chatHistoryTable.tableName,
       },

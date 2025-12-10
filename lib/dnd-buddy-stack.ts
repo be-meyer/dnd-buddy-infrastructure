@@ -11,7 +11,7 @@ export class DnDBuddyStack extends cdk.Stack {
 
     // Model configuration - easily change models here
     const bedrockModelId = 'anthropic.claude-haiku-4-5-20251001-v1:0';
-    const bedrockModelIdTool = 'amazon.nova-micro-v1:0';
+    const bedrockModelIdTool = 'amazon.nova-2-lite-v1:0';
     const embeddingModelId = 'cohere.embed-english-v3';
 
     // Create Auth Stack
