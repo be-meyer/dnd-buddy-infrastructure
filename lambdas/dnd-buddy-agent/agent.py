@@ -295,6 +295,7 @@ class AgentGraphBuilder:
         self.session_id = session_id
         self.stream_callback = stream_callback
         self.tools_executed: List[str] = []
+        self.calls_made: set = set()  # Track tool calls to prevent duplicates
         
         # Store context for creative prompt
         self.campaign_context = campaign_context
@@ -328,7 +329,7 @@ class AgentGraphBuilder:
         return {"messages": [AIMessage(content="[PLANNING_COMPLETE]")]}
     
     def _tool_node(self, state: MessagesState) -> Dict[str, List]:
-        """Execute tools with automatic context injection."""
+        """Execute tools with automatic context injection and deduplication."""
         messages = state["messages"]
         last_message = messages[-1]
         tool_calls = getattr(last_message, 'tool_calls', [])
@@ -339,6 +340,16 @@ class AgentGraphBuilder:
         for tool_call in tool_calls:
             tool_name = tool_call['name']
             tool_args = tool_call['args'].copy()
+            
+            # Create hashable key for deduplication (tool name + sorted args)
+            call_key = (tool_name, tuple(sorted(tool_args.items())))
+            if call_key in self.calls_made:
+                logger.info(f"  -> Skipping duplicate: {tool_name}")
+                tool_messages.append(
+                    ToolMessage(content="[Duplicate call - see previous results]", tool_call_id=tool_call['id'])
+                )
+                continue
+            self.calls_made.add(call_key)
             
             if tool_name in CONTEXT_TOOLS:
                 tool_args['user_id'] = self.user_id
