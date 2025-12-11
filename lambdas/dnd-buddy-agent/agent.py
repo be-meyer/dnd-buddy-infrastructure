@@ -39,6 +39,8 @@ TOOLS = [search_campaign, roll_dice, get_file_content, get_conversation_history,
 TOOL_MAP = {tool.name: tool for tool in TOOLS}
 CONTEXT_TOOLS = {'search_campaign', 'get_file_content'}
 SESSION_TOOLS = {'get_conversation_history'}
+# Tools that should return results directly without creative model processing
+PASSTHROUGH_TOOLS = {'translate_runes'}
 
 
 # =============================================================================
@@ -521,8 +523,22 @@ def main(input_data: Dict[str, Any], stream_callback: Optional[Callable] = None)
         # Collect tool results for context
         tool_results = [msg for msg in result["messages"] if isinstance(msg, ToolMessage)]
         
-        # Phase 2: Final response generation (expensive model, with streaming, own prompt)
-        response_text = agent_builder.generate_final_response(user_message, history_messages, tool_results)
+        # Check if only passthrough tools were used (e.g., translate_runes)
+        tools_used = set(agent_builder.tools_executed)
+        passthrough_only = tools_used and all(
+            any(pt in tool for pt in PASSTHROUGH_TOOLS) 
+            for tool in tools_used
+        )
+        
+        if passthrough_only and tool_results:
+            # Return tool results directly without creative processing
+            logger.info("Passthrough mode: returning tool results directly")
+            response_text = tool_results[-1].content
+            if stream_callback:
+                stream_callback([{"type": "text", "text": response_text, "index": 0}])
+        else:
+            # Phase 2: Final response generation (expensive model, with streaming, own prompt)
+            response_text = agent_builder.generate_final_response(user_message, history_messages, tool_results)
 
         # Append tools summary
         tools_summary = agent_builder.get_tools_summary()

@@ -130,9 +130,9 @@ def english_to_runes(text: str) -> str:
         
         # Preserve spaces and punctuation
         if char == ' ':
-            result.append('᛫')  # Runic word separator
+            result.append('᛬')  # Two dots for word separator
         elif char in '.,!?':
-            result.append('᛬')  # Runic sentence separator
+            result.append('᛭')  # Cross for sentence separator
         else:
             result.append(char)  # Keep unknown chars as-is
         i += 1
@@ -173,9 +173,9 @@ def runes_to_english(runes: str) -> str:
             continue
         
         # Handle runic separators
-        if char == '᛫':
+        if char == '᛬':
             result.append(' ')
-        elif char == '᛬':
+        elif char == '᛭':
             result.append('.')
         else:
             result.append(char)
@@ -217,12 +217,10 @@ def translate_runes(text: str, direction: str = "to_runes") -> str:
     direction = direction.lower().strip()
     
     if direction in ("to_runes", "to_rune", "encode", "english_to_runes"):
-        runes = english_to_runes(text)
-        return f"ᚱᚢᚾᛖᛋ: {runes}\n\nOriginal: {text}"
-    
+        return english_to_runes(text)
+
     elif direction in ("to_english", "decode", "runes_to_english", "from_runes"):
-        english = runes_to_english(text)
-        return f"English: {english}\n\nOriginal runes: {text}"
+        return runes_to_english(text)
     
     else:
         return (
