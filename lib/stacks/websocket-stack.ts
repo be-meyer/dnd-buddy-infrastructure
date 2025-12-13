@@ -14,7 +14,9 @@ export interface WebSocketStackProps extends cdk.StackProps {
   userPool: cognito.IUserPool;
   connectionTable: dynamodb.ITable;
   campaignFilesBucket: any;
+  dndRulesBucket: any;
   vectorIndexName: string;
+  dndVectorIndexName: string;
   chatHistoryTable: dynamodb.ITable;
   bedrockModelId: string;
   bedrockModelIdTool: string;
@@ -85,7 +87,9 @@ export class WebSocketStack extends cdk.Stack {
       environment: {
         VECTOR_BUCKET_NAME: `dnd-vec-${cdk.Stack.of(this).account}`,
         VECTOR_INDEX_NAME: props.vectorIndexName,
+        DND_VECTOR_INDEX_NAME: props.dndVectorIndexName,
         CAMPAIGN_FILES_BUCKET: props.campaignFilesBucket.bucketName,
+        DND_RULES_BUCKET: props.dndRulesBucket.bucketName,
         CHAT_HISTORY_TABLE_NAME: props.chatHistoryTable.tableName,
         BEDROCK_MODEL_ID: `eu.${props.bedrockModelId}`,
         BEDROCK_MODEL_ID_TOOL: `eu.${props.bedrockModelIdTool}`,
@@ -98,8 +102,9 @@ export class WebSocketStack extends cdk.Stack {
     // Grant DynamoDB permissions for chat history
     props.chatHistoryTable.grantReadWriteData(this.agentLambda);
 
-    // Grant S3 read permissions for campaign files
+    // Grant S3 read permissions for campaign files and D&D rules
     props.campaignFilesBucket.grantRead(this.agentLambda);
+    props.dndRulesBucket.grantRead(this.agentLambda);
 
     // Grant S3 Vectors query permissions
     this.agentLambda.addToRolePolicy(

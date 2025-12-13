@@ -23,7 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Import tools
-from tools import search_campaign, roll_dice, get_file_content, get_conversation_history, translate_runes
+from tools import search_campaign, roll_dice, get_file_content, get_conversation_history, translate_runes, search_dnd_rules, get_dnd_file
 from tools.get_history import get_history_messages, save_messages
 
 # =============================================================================
@@ -35,10 +35,12 @@ BEDROCK_MODEL_PLANNING = os.environ.get('BEDROCK_MODEL_ID_TOOL', 'eu.amazon.nova
 MAX_ITERATIONS = int(os.environ.get('MAX_AGENT_ITERATIONS', '3'))
 
 # Tool registry
-TOOLS = [search_campaign, roll_dice, get_file_content, get_conversation_history, translate_runes]
+TOOLS = [search_campaign, roll_dice, get_file_content, get_conversation_history, translate_runes, search_dnd_rules, get_dnd_file]
 TOOL_MAP = {tool.name: tool for tool in TOOLS}
 CONTEXT_TOOLS = {'search_campaign', 'get_file_content'}
 SESSION_TOOLS = {'get_conversation_history'}
+# Tools that don't need user/campaign context injection
+DND_RULES_TOOLS = {'search_dnd_rules', 'get_dnd_file'}
 # Tools that should return results directly without creative model processing
 PASSTHROUGH_TOOLS = {'translate_runes'}
 
@@ -144,6 +146,21 @@ This is the established canon. If something is missing here or in search results
    Translate text to/from The Architects' ancient rune cipher.
    Use when user asks to encode a message in runes, decode rune inscriptions,
    or create riddles/puzzles using the ancient script.
+
+6. **search_dnd_rules**
+   Search official D&D 5e rules, spells, monsters, items, classes, and compendium.
+   Use when user asks about:
+   - D&D rules, mechanics, or how things work in 5e
+   - Spell descriptions, effects, or components
+   - Monster stats from official sources (not campaign-specific)
+   - Class features, abilities, or progression
+   - Item properties, magic items, or equipment
+   - Race/species traits, feats, backgrounds
+   Optional category filter: spells, bestiary, classes, items, races, feats, backgrounds, rules, books
+
+7. **get_dnd_file**
+   Retrieve complete D&D rules or compendium file content.
+   Use when search_dnd_rules returns partial info and you need the full entry.
 
 ---
 
@@ -335,7 +352,7 @@ class AgentGraphBuilder:
         tool_calls = getattr(last_message, 'tool_calls', [])
         tool_messages = []
         
-        logger.info(f"Executing {len(tool_calls)} tool(s)")
+        logger.info(f"Executing {len(tool_calls)} tool(s): {[tc['name'] for tc in tool_calls]}")
         
         for tool_call in tool_calls:
             tool_name = tool_call['name']
@@ -350,6 +367,7 @@ class AgentGraphBuilder:
                 )
                 continue
             self.calls_made.add(call_key)
+            logger.info(f"  -> Executing: {tool_name}")
             
             if tool_name in CONTEXT_TOOLS:
                 tool_args['user_id'] = self.user_id
@@ -357,21 +375,30 @@ class AgentGraphBuilder:
             if tool_name in SESSION_TOOLS:
                 tool_args['session_id'] = self.session_id
             
-            tool_func = TOOL_MAP.get(tool_name)
-            if tool_func:
-                result = tool_func.invoke(tool_args)
-                logger.info(f"  -> {tool_name}: {len(str(result))} chars")
-            else:
-                result = f"Unknown tool: {tool_name}"
-                logger.error(f"  -> Unknown tool: {tool_name}")
-            
+            # Build display args before execution (so we can track even if tool fails)
             display_args = {k: v for k, v in tool_args.items() 
                           if k not in ['user_id', 'campaign', 'session_id']}
             if display_args:
                 args_str = ', '.join(f"{k}={repr(v)}" for k, v in display_args.items())
-                self.tools_executed.append(f"{tool_name}({args_str})")
+                tool_display = f"{tool_name}({args_str})"
             else:
-                self.tools_executed.append(f"{tool_name}()")
+                tool_display = f"{tool_name}()"
+            
+            # Execute tool
+            tool_func = TOOL_MAP.get(tool_name)
+            if tool_func:
+                try:
+                    result = tool_func.invoke(tool_args)
+                    logger.info(f"  -> {tool_name}: {len(str(result))} chars")
+                except Exception as e:
+                    logger.error(f"  -> {tool_name} failed: {e}")
+                    result = f"Tool error: {str(e)}"
+            else:
+                result = f"Unknown tool: {tool_name}"
+                logger.error(f"  -> Unknown tool: {tool_name}")
+            
+            # Always track the tool execution (even if it failed)
+            self.tools_executed.append(tool_display)
             
             tool_messages.append(
                 ToolMessage(content=str(result), tool_call_id=tool_call['id'])
@@ -421,6 +448,7 @@ class AgentGraphBuilder:
     
     def get_tools_summary(self) -> str:
         """Get formatted summary of tools used as a simple italic bullet list."""
+        logger.info(f"get_tools_summary called - tools_executed: {self.tools_executed}")
         if not self.tools_executed:
             return ""
         bullets = "\n".join(f"- _{tool}_" for tool in self.tools_executed)
@@ -551,12 +579,19 @@ def main(input_data: Dict[str, Any], stream_callback: Optional[Callable] = None)
             # Phase 2: Final response generation (expensive model, with streaming, own prompt)
             response_text = agent_builder.generate_final_response(user_message, history_messages, tool_results)
 
-        # Append tools summary
+        # Always append tools summary to response
         tools_summary = agent_builder.get_tools_summary()
         if tools_summary:
             response_text += tools_summary
+            # Stream tools summary - log if it fails but don't block
             if stream_callback:
-                stream_callback([{"type": "text", "text": tools_summary, "index": 0}])
+                try:
+                    stream_callback([{"type": "text", "text": tools_summary, "index": 0}])
+                    logger.info(f"Tools summary streamed: {len(agent_builder.tools_executed)} tools")
+                except Exception as e:
+                    logger.warning(f"Failed to stream tools summary: {e}")
+        else:
+            logger.info("No tools were executed - skipping tools summary")
         
         # Save to history (without tools summary)
         save_messages(

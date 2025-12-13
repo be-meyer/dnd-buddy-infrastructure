@@ -8,8 +8,10 @@ export interface StorageStackProps extends cdk.StackProps {}
 
 export class StorageStack extends cdk.Stack {
   public readonly campaignFilesBucket: s3.Bucket;
+  public readonly dndRulesBucket: s3.Bucket;
   public readonly vectorBucket: CfnVectorBucket;
   public readonly vectorIndex: CfnIndex;
+  public readonly dndVectorIndex: CfnIndex;
   public readonly chatHistoryTable: dynamodb.Table;
   public readonly websocketConnectionTable: dynamodb.Table;
 
@@ -19,6 +21,14 @@ export class StorageStack extends cdk.Stack {
     // S3 bucket for campaign files
     this.campaignFilesBucket = new s3.Bucket(this, 'CampaignFilesBucket', {
       bucketName: `dnd-buddy-files-${cdk.Stack.of(this).account}`,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
+
+    // S3 bucket for D&D rules and compendium files
+    this.dndRulesBucket = new s3.Bucket(this, 'DnDRulesBucket', {
+      bucketName: `dnd-buddy-rules-${cdk.Stack.of(this).account}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: cdk.RemovalPolicy.DESTROY
@@ -70,11 +80,31 @@ export class StorageStack extends cdk.Stack {
 
     this.vectorIndex.addDependency(this.vectorBucket);
 
+    // S3 Vectors index for D&D rules and compendium
+    this.dndVectorIndex = new CfnIndex(this, 'DnDVectorIndex', {
+      indexName: 'dnd-vectors-index',
+      vectorBucketName: vectorBucketName,
+      dimension: 1024, // Cohere embed-english-v3 produces 1024-dimensional vectors
+      distanceMetric: 'cosine',
+      dataType: 'float32',
+      metadataConfiguration: {
+        nonFilterableMetadataKeys: ['chunkText'],
+      },
+    });
+
+    this.dndVectorIndex.addDependency(this.vectorBucket);
+
     // Outputs
     new cdk.CfnOutput(this, 'CampaignFilesBucketName', {
       value: this.campaignFilesBucket.bucketName,
       description: 'S3 bucket for campaign files',
       exportName: 'DndBuddy-CampaignFilesBucketName',
+    });
+
+    new cdk.CfnOutput(this, 'DnDRulesBucketName', {
+      value: this.dndRulesBucket.bucketName,
+      description: 'S3 bucket for D&D rules and compendium',
+      exportName: 'DndBuddy-DnDRulesBucketName',
     });
 
     new cdk.CfnOutput(this, 'VectorBucketName', {
@@ -87,6 +117,12 @@ export class StorageStack extends cdk.Stack {
       value: this.vectorIndex.indexName || 'campaign-vectors-index',
       description: 'S3 Vectors index name',
       exportName: 'DndBuddy-VectorIndexName',
+    });
+
+    new cdk.CfnOutput(this, 'DnDVectorIndexName', {
+      value: this.dndVectorIndex.indexName || 'dnd-vectors-index',
+      description: 'S3 DnD Vectors index name',
+      exportName: 'DndBuddy-DnDVectorIndexName',
     });
 
     new cdk.CfnOutput(this, 'ChatHistoryTableName', {
