@@ -37,7 +37,7 @@ export class ApiStack extends cdk.Stack {
       handler: 'handler.index_handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../../lambdas/indexing')),
       timeout: cdk.Duration.minutes(5),
-      memorySize: 512,
+      memorySize: 128,
       logGroup: indexingLogGroup,
       environment: {
         CAMPAIGN_FILES_BUCKET: props.campaignFilesBucket.bucketName,
